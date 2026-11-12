@@ -1,6 +1,9 @@
 [package]
 name = "hnsw"
-version = "0.11.1-alpha.0"
+# Must stay 0.11.0: a [patch.crates-io] entry is silently ignored unless its
+# version satisfies the `hnsw = "0.11.0"` requirement, and 0.11.1-alpha.0
+# (prereleases do not satisfy ^0.11.0) would not. See FES/memvid Cargo.toml.
+version = "0.11.0"
 authors = ["Geordon Worley <vadixidav@gmail.com>"]
 edition = "2018"
 description = "Fast approximate nearest neighbors"
