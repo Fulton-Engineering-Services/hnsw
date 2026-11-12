@@ -306,7 +306,11 @@ where
             self.search_single_layer(q, searcher, Layer::NonZero(layer), cap);
             if ix + 1 == level {
                 let found = core::cmp::min(dest.len(), searcher.nearest.len());
-                dest.copy_from_slice(&searcher.nearest[..found]);
+                // The result pool width is query-dependent: the traversal stops as soon as
+                // no candidate can enter it, so `searcher.nearest` can hold fewer entries
+                // than `dest` is long. Copy only the filled prefix -- copying into the whole
+                // `dest` panics whenever `dest.len()` exceeds what the search filled.
+                dest[..found].copy_from_slice(&searcher.nearest[..found]);
                 return &mut dest[..found];
             }
             self.lower_search(layer, searcher);
@@ -318,7 +322,9 @@ where
         self.search_zero_layer(q, searcher, cap);
 
         let found = core::cmp::min(dest.len(), searcher.nearest.len());
-        dest.copy_from_slice(&searcher.nearest[..found]);
+        // See the note above: the pool can be narrower than `dest`, so copy the `found`
+        // prefix rather than the whole destination.
+        dest[..found].copy_from_slice(&searcher.nearest[..found]);
         &mut dest[..found]
     }
 
