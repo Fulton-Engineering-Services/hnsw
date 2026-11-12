@@ -391,14 +391,22 @@ where
         // See Algorithm 5 line 5 of the paper. The paper makes no further comment on why `1` was chosen.
         let &Neighbor { index, distance } = searcher.nearest.first().unwrap();
         searcher.nearest.clear();
-        searcher.seen.clear();
+        // Deliberate deviation from the paper's Algorithm 5, which resets the visited set
+        // on every descent (upstream clears `seen` here and re-seeds it with
+        // `layer[index].zero_node`, both deleted below). `seen` is keyed on `zero_node`
+        // ids, which name the same point in every layer, so carrying the filter down the
+        // descent is what makes `ef` behave as a real candidate budget. Measured on the
+        // memvid-core 1001-vector HNSW fixture at `ef = 200`: resetting per layer admits
+        // 138 candidates, carrying it down admits the full 200 (memvid-core
+        // `tests/hnsw_carryforward.rs::ef_sets_the_graph_candidate_pool`). The filter is
+        // per query -- `initialize_searcher` clears the searcher -- so this costs at most
+        // one query's explored set, never growth across queries.
         // Update the node to the next layer.
         let new_index = layer[index].next_node as usize;
         let candidate = Neighbor {
             index: new_index,
             distance,
         };
-        searcher.seen.insert(layer[index].zero_node);
         // Insert the index of the nearest neighbor into the nearest pool for the next layer.
         searcher.nearest.push(candidate);
         // Insert the index into the candidate pool as well.
