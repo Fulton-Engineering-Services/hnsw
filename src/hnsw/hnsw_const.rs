@@ -391,22 +391,28 @@ where
         // See Algorithm 5 line 5 of the paper. The paper makes no further comment on why `1` was chosen.
         let &Neighbor { index, distance } = searcher.nearest.first().unwrap();
         searcher.nearest.clear();
-        // Deliberate deviation from the paper's Algorithm 5, which resets the visited set
-        // on every descent (upstream clears `seen` here and re-seeds it with
-        // `layer[index].zero_node`, both deleted below). `seen` is keyed on `zero_node`
-        // ids, which name the same point in every layer, so carrying the filter down the
-        // descent is what makes `ef` behave as a real candidate budget. Measured on the
-        // memvid-core 1001-vector HNSW fixture at `ef = 200`: resetting per layer admits
-        // 138 candidates, carrying it down admits the full 200 (memvid-core
-        // `tests/hnsw_carryforward.rs::ef_sets_the_graph_candidate_pool`). The filter is
-        // per query -- `initialize_searcher` clears the searcher -- so this costs at most
-        // one query's explored set, never growth across queries.
+        searcher.seen.clear();
+        // Restored from upstream `4ce5e6d` (rust-cv/hnsw PR #36), which this fork deleted
+        // in `9115203` so that `seen` persisted down the layer descent. Carrying it widened
+        // the candidate pool a query could admit but cost exact results: against the
+        // brute-force oracle on a 1001-vector fixture (DIM=8, M=12, EF_CONSTRUCTION=24, 16
+        // queries) the carried version returned 379/384 at k=24 with 21 misses strictly
+        // closer than the worst result returned, and 3050/3200 at k=200, while this one
+        // returns 384/384 and 3198/3200; `ef` of 128, 200 and 4096 recovered none of them.
+        // A 2x2 build/search differential puts the cause entirely on the query side: a graph
+        // *built* with the carry is exact (384/384) when searched with this reset, and a
+        // graph built with this reset loses the same results when searched with the carry.
+        // The width the carry seemed to buy is not a property of this function either --
+        // `nearest` fills a 200-slot `dest` completely at `ef = 200` under both settings.
         // Update the node to the next layer.
         let new_index = layer[index].next_node as usize;
         let candidate = Neighbor {
             index: new_index,
             distance,
         };
+        // Paired with the reset above (upstream `4ce5e6d`): the entry point counts as
+        // visited for this layer's expansion.
+        searcher.seen.insert(layer[index].zero_node);
         // Insert the index of the nearest neighbor into the nearest pool for the next layer.
         searcher.nearest.push(candidate);
         // Insert the index into the candidate pool as well.
